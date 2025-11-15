@@ -17,6 +17,9 @@ class FuselageParameters(om.ExplicitComponent):
         add_aviary_option(self, Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_TOURIST)
         add_aviary_option(self, Aircraft.CrewPayload.Design.SEAT_PITCH_TOURIST, units='inch')
         add_aviary_option(self, Aircraft.Fuselage.SEAT_WIDTH, units='inch')
+        add_aviary_option(self, Aircraft.CrewPayload.Design.NUM_BUSINESS_CLASS)
+        add_aviary_option(self, Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_BUSINESS)
+        add_aviary_option(self, Aircraft.CrewPayload.Design.SEAT_PITCH_BUSINESS, units='inch')
         add_aviary_option(self, Settings.VERBOSITY)
 
     def setup(self):
@@ -43,28 +46,57 @@ class FuselageParameters(om.ExplicitComponent):
     def compute(self, inputs, outputs):
         options = self.options
         verbosity = options[Settings.VERBOSITY]
-        seats_abreast = options[Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_TOURIST]
+        seats_abreast_tourist = options[Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_TOURIST]
         seat_width, _ = options[Aircraft.Fuselage.SEAT_WIDTH]
         num_aisle = options[Aircraft.Fuselage.NUM_AISLES]
         aisle_width, _ = options[Aircraft.Fuselage.AISLE_WIDTH]
         PAX = options[Aircraft.CrewPayload.Design.NUM_PASSENGERS]
-        seat_pitch, _ = options[Aircraft.CrewPayload.Design.SEAT_PITCH_TOURIST]
+        seat_pitch_tourist, _ = options[Aircraft.CrewPayload.Design.SEAT_PITCH_TOURIST]
+
+        pax_business = options[Aircraft.CrewPayload.Design.NUM_BUSINESS_CLASS]
+        seats_abreast_business = options[Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_BUSINESS]
+        seat_pitch_business, _ = options[Aircraft.CrewPayload.Design.SEAT_PITCH_BUSINESS]
+
+        pax_tourist = PAX - pax_business
 
         delta_diameter = inputs[Aircraft.Fuselage.DELTA_DIAMETER]
 
-        cabin_width = seats_abreast * seat_width + num_aisle * aisle_width + 12
+        cabin_width_tourist = seats_abreast_tourist * seat_width + num_aisle * aisle_width + 12
+        if pax_business > 0:
+            cabin_width_business = seats_abreast_business * seat_width + num_aisle * aisle_width + 12
+            cabin_width = max(cabin_width_tourist, cabin_width_business)
+            seats_abreast = max(seats_abreast_tourist, seats_abreast_business)
+        else:
+            cabin_width = cabin_width_tourist
+            seats_abreast = seats_abreast_tourist
 
         if PAX < 1:
             if verbosity >= Verbosity.BRIEF:
                 print('Warning: you have not specified at least one passenger')
 
+        # business class cabin length
+        cabin_len_business = 0
+        if pax_business > 0:
+            cabin_len_business_a = pax_business * seat_pitch_business / 12
+            cabin_len_business_b = (pax_business - 1) * seat_pitch_business / (seats_abreast_business * 12)
+            sig1_business = sigmoidX(seats_abreast_business, 1.5, -0.01)
+            sig2_business = sigmoidX(seats_abreast_business, 1.5, 0.01)
+            cabin_len_business = cabin_len_business_a * sig1_business + cabin_len_business_b * sig2_business
+
+        # tourist class cabin length
+        cabin_len_tourist_a = pax_tourist * seat_pitch_tourist / 12
+        cabin_len_tourist_b = (pax_tourist - 1) * seat_pitch_tourist / (seats_abreast_tourist * 12) if pax_tourist > 0 else 0
+        sig1_tourist = sigmoidX(seats_abreast_tourist, 1.5, -0.01)
+        sig2_tourist = sigmoidX(seats_abreast_tourist, 1.5, 0.01)
+        cabin_len_tourist = cabin_len_tourist_a * sig1_tourist + cabin_len_tourist_b * sig2_tourist
+
+        cabin_len = cabin_len_business + cabin_len_tourist
+
         # single seat across
-        cabin_len_a = PAX * seat_pitch / 12
         nose_height_a = cabin_width / 12
         cabin_height_a = nose_height_a + delta_diameter
 
         # multiple seats across, assuming no first class seats
-        cabin_len_b = (PAX - 1) * seat_pitch / (seats_abreast * 12)
         cabin_height_b = cabin_width / 12
         nose_height_b = cabin_height_b - delta_diameter
 
@@ -76,12 +108,19 @@ class FuselageParameters(om.ExplicitComponent):
         sig1 = sigmoidX(seats_abreast, 1.5, -0.01)
         sig2 = sigmoidX(seats_abreast, 1.5, 0.01)
         outputs['cabin_height'] = cabin_height_a * sig1 + cabin_height_b * sig2
-        outputs['cabin_len'] = cabin_len_a * sig1 + cabin_len_b * sig2
+        outputs['cabin_len'] = cabin_len
         outputs['nose_height'] = nose_height_a * sig1 + nose_height_b * sig2
 
     def compute_partials(self, inputs, J):
         options = self.options
-        seats_abreast = options[Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_TOURIST]
+        seats_abreast_tourist = options[Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_TOURIST]
+        pax_business = options[Aircraft.CrewPayload.Design.NUM_BUSINESS_CLASS]
+
+        if pax_business > 0:
+            seats_abreast_business = options[Aircraft.CrewPayload.Design.NUM_SEATS_ABREAST_BUSINESS]
+            seats_abreast = max(seats_abreast_tourist, seats_abreast_business)
+        else:
+            seats_abreast = seats_abreast_tourist
 
         J['nose_height', Aircraft.Fuselage.DELTA_DIAMETER] = -sigmoidX(seats_abreast, 1.5, 0.01)
         J['cabin_height', Aircraft.Fuselage.DELTA_DIAMETER] = sigmoidX(seats_abreast, 1.5, -0.01)
