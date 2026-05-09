@@ -1,6 +1,7 @@
 import csv
 import json
 import math
+import re
 import os
 import warnings
 from copy import deepcopy
@@ -1366,9 +1367,23 @@ class AviaryProblem(om.Problem):
             )
 
         if name is None:
-            name = self._name + '_' + str(problem_type.value)
-            curr_time = datetime.now().strftime('%m%d%y%H%M%S')
-            name += '_' + curr_time
+            # Numbering problem names for multiple off-design runs.
+            suggested_name = self._name + '_' + str(problem_type.value)
+            import pdb
+            pdb.set_trace()
+            dirname_pattern = re.compile(rf"^{suggested_name}(?:_(\d+))?$")
+            highest = 0
+            # Checking path names without a while loop.
+            for path in Path(".").iterdir():
+                if path.is_dir():
+                    match = dirname_pattern.match(str(path))
+                    if match:
+                        num = int(match.group(1)) if match.group(1) else 1
+                        highest = max(highest, num)
+            highest += 1
+            # If it's the first iteration, no name change required.
+            if highest != 1:
+                name = suggested_name + '_' + str(highest)
         off_design_prob = AviaryProblem(name=name)
 
         # Set up problem for mission, such as equations of motion, configurators, etc.

@@ -16,9 +16,9 @@ import aviary.api as av
 phase_info = av.default_height_energy_phase_info
 phase_info['post_mission']['target_range'] = (2500.0, 'nmi')
 
-##################
-# Sizing Mission #
-##################
+###########################################
+# Sizing Mission ##########################
+###########################################
 prob = av.AviaryProblem(verbosity=0, name='sizing_mission')
 
 # Load aircraft and options data from user
@@ -41,17 +41,21 @@ prob.add_objective()
 prob.setup()
 print('Running Design Mission')
 prob.run_aviary_problem()
+##########################################
+##########################################
+
+
 
 # Fallout Mission
 print('Running fixed-mass, varying range off-design problem')
 prob_fallout = prob.run_off_design_mission(
-    problem_type='fallout', mission_gross_mass=115000, name='fallout_mission'
+    problem_type='fallout', mission_gross_mass=115000
 )
 
 # Alternate Mission
 print('Running fixed-range, varying fuel off-design problem')
 prob_alternate = prob.run_off_design_mission(
-    problem_type='alternate', mission_range=1250, name='alternate_mission'
+    problem_type='alternate', mission_range=1250
 )
 
 print('\n--------------')

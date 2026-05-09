@@ -1,7 +1,6 @@
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 from copy import deepcopy
-from datetime import datetime
 import re
 
 from openmdao.utils.testing_utils import require_pyoptsparse, use_tempdirs
@@ -72,14 +71,14 @@ class TestSizingResults(unittest.TestCase):
     @require_pyoptsparse(optimizer='IPOPT')
     @patch('aviary.interface.methods_for_level2.datetime')
     def test_output_naming(self, mock_datetime):
-        fixed_now = datetime(2026, 2, 5, 12, 1, 1)
-        mock_datetime.now.return_value = fixed_now
-
         local_phase_info = deepcopy(phase_info)
-
         prob = reload_aviary_problem('interface/test/sizing_results_for_test.json')
-        prob = prob.run_off_design_mission(problem_type='fallout', phase_info=local_phase_info)
-        self.assertTrue('fallout_020526120101' in prob._name)
+        probf1 = prob.run_off_design_mission(problem_type='fallout', phase_info=local_phase_info)
+        proba1 = prob.run_off_design_mission(problem_type='alternate', phase_info=local_phase_info)
+        probf2 = prob.run_off_design_mission(problem_type='fallout', phase_info=local_phase_info)
+        proba2 = prob.run_off_design_mission(problem_type='alternate', phase_info=local_phase_info)
+        self.assertTrue('fallout_2' in probf2._name)
+        self.assertTrue('alternate_2' in proba2._name)
 
     def compare_files(self, test_file, validation_file):
         """
